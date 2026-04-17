@@ -18,7 +18,15 @@ import json
 import re
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from threading import Lock
+
+_print_lock = Lock()
+
+def _log(*args, **kwargs):
+    with _print_lock:
+        print(*args, **kwargs)
 
 # ─── 本地 LLM 客户端 ──────────────────────────────────────────────────────────
 LLM_BASE_URL = "http://localhost:4141/v1"
@@ -211,16 +219,16 @@ def process_chapter(
         if terms:
             terms_path = terms_dir / f"{md_path.stem}.txt"
             write_terms_file(terms, chapter_title, terms_path)
-            print(f"    术语: {len(terms):2d} 条 → {terms_path.name}")
+            _log(f"  [{md_path.name}] 术语: {len(terms):2d} 条 → {terms_path.name}")
         else:
-            print(f"    术语: LLM 未返回结果，跳过")
+            _log(f"  [{md_path.name}] 术语: LLM 未返回结果，跳过")
     else:
-        print(f"    术语: 已跳过（未启用 LLM）")
+        _log(f"  [{md_path.name}] 术语: 已跳过（未启用 LLM）")
 
     # 2. Callout
     if already_has_callout(body):
         if not force_callout:
-            print(f"    callout: 已存在，跳过")
+            _log(f"  [{md_path.name}] callout: 已存在，跳过")
             return
         # 移除旧 callout 块再重写
         body = re.sub(
@@ -229,9 +237,9 @@ def process_chapter(
             body,
             flags=re.MULTILINE,
         ).lstrip("\n")
-        print(f"    callout: 覆盖旧内容")
+        _log(f"  [{md_path.name}] callout: 覆盖旧内容")
     else:
-        print(f"    callout: 新增")
+        _log(f"  [{md_path.name}] callout: 新增")
 
     summary = build_gpt_summary(fm, body) if use_llm else build_fallback_summary(fm, body)
     callout = make_callout(summary)
@@ -247,6 +255,7 @@ def main() -> int:
     ap.add_argument("--terms-dir", default="./terms")
     ap.add_argument("--no-llm", action="store_true", help="禁用 LLM，只生成结构化摘要，不提取术语")
     ap.add_argument("--force-callout", action="store_true", help="覆盖已存在的 callout（默认跳过）")
+    ap.add_argument("--workers", type=int, default=4, help="并行线程数（默认 4）")
     ap.add_argument("--chapter", help="只处理指定文件名（测试用）")
     args = ap.parse_args()
 
@@ -270,17 +279,29 @@ def main() -> int:
     print(f"共 {len(files)} 个章节，开始处理…\n")
 
     force_callout = args.force_callout
+    workers = args.workers if not args.chapter else 1  # 单章测试不需要并发
 
-    for path in files:
-        print(f"  {path.name}")
+    _log(f"并行数: {workers}")
+
+    def _run(path: Path):
+        _log(f"  [{path.name}] 开始")
         try:
             process_chapter(path, terms_dir, use_llm, force_callout=force_callout)
         except Exception as exc:
-            print(f"    [错误] {exc}", file=sys.stderr)
-        if use_llm:
-            time.sleep(0.2)
+            _log(f"  [{path.name}] [错误] {exc}", file=sys.stderr)
 
-    print(f"\n完成。callout 已写入章节文件，术语表在: {terms_dir}/")
+    if workers <= 1:
+        for path in files:
+            _run(path)
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {pool.submit(_run, p): p for p in files}
+            for fut in as_completed(futures):
+                exc = fut.exception()
+                if exc:
+                    _log(f"  [未捕获错误] {futures[fut].name}: {exc}", file=sys.stderr)
+
+    _log(f"\n完成。callout 已写入章节文件，术语表在: {terms_dir}/")
     return 0
 
 
