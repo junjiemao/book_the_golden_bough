@@ -32,9 +32,17 @@ jobs:
           quartz_repo_ref: v4
           quartz_custom_css: .github/quartz/custom.scss
 
-      - name: Deploy to Cloudflare Pages
+      - name: Ensure Cloudflare Pages Project
+        continue-on-error: true
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy _site --project-name ${{ vars.CLOUDFLARE_PAGES_PROJECT || 'golden-bough' }} --branch ${{ github.ref_name }}
+          command: pages project create ${{ vars.CLOUDFLARE_PAGES_PROJECT }} --production-branch main
+
+      - name: Deploy Site to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy _site --project-name ${{ vars.CLOUDFLARE_PAGES_PROJECT }} --branch ${{ github.ref_name }} --commit-dirty=true
