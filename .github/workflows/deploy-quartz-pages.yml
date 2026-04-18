@@ -28,6 +28,8 @@ jobs:
 
       - name: Build Quartz
         uses: konstfish/quartz-build-action@v7
+        env:
+          QUARTZ_BASE_URL: ${{ vars.QUARTZ_BASE_URL || 'xmatrix.github.io/golden_bough' }}
         with:
           source: golden_bough
           destination: _site

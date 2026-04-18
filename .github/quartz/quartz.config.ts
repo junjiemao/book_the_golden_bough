@@ -14,7 +14,8 @@ const config: QuartzConfig = {
     enablePopovers: true,
     analytics: null,
     locale: "zh-CN",
-    baseUrl: "",
+    // Must be a valid URL host/path for emitters like 404Page.
+    baseUrl: "xmatrix.github.io/golden_bough",
     ignorePatterns: ["private", "templates", ".obsidian"],
     defaultDateType: "modified",
     theme: {
