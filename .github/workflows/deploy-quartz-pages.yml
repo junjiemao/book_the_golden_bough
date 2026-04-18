@@ -30,7 +30,6 @@ jobs:
           quartz_config: .github/quartz/quartz.config.ts
           quartz_layout: .github/quartz/quartz.layout.ts
           quartz_repo_ref: v4
-          quartz_custom_css: .github/quartz/custom.scss
 
       - name: Ensure Cloudflare Pages Project
         continue-on-error: true
