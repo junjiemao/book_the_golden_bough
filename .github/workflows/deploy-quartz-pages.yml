@@ -39,11 +39,20 @@ jobs:
         run: |
           set -euo pipefail
 
-          if npx --yes wrangler@3.90.0 pages project list --format json | python3 -c "import json,sys,os; target=os.environ['CLOUDFLARE_PAGES_PROJECT']; projects=json.load(sys.stdin); sys.exit(0 if any(p.get('name') == target for p in projects) else 1)"; then
+          echo "Ensuring Cloudflare Pages project: ${CLOUDFLARE_PAGES_PROJECT}"
+          set +e
+          CREATE_OUT=$(npx --yes wrangler@3.90.0 pages project create "${CLOUDFLARE_PAGES_PROJECT}" --production-branch main 2>&1)
+          CREATE_STATUS=$?
+          set -e
+
+          if [ ${CREATE_STATUS} -eq 0 ]; then
+            echo "Cloudflare Pages project created: ${CLOUDFLARE_PAGES_PROJECT}"
+          elif echo "${CREATE_OUT}" | grep -q "8000002\|already exists"; then
             echo "Cloudflare Pages project already exists: ${CLOUDFLARE_PAGES_PROJECT}"
           else
-            echo "Creating Cloudflare Pages project: ${CLOUDFLARE_PAGES_PROJECT}"
-            npx --yes wrangler@3.90.0 pages project create "${CLOUDFLARE_PAGES_PROJECT}" --production-branch main
+            echo "Failed to ensure Cloudflare Pages project"
+            echo "${CREATE_OUT}"
+            exit ${CREATE_STATUS}
           fi
 
       - name: Deploy Site to Cloudflare Pages
